@@ -18,6 +18,8 @@ type builder = t -> t [@@deriving sexp_of]
     create a full app *)
 
 val port : int -> builder
+val debug : bool -> builder
+val verbose : bool -> builder
 
 val ssl : cert:string -> key:string -> builder
 

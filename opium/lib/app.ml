@@ -66,6 +66,8 @@ let attach_middleware {verbose; debug; routes; middlewares; _} =
   |> List.filter_opt
 
 let port port t = {t with port}
+let debug debug t = {t with debug}
+let verbose verbose t = {t with verbose}
 
 let ssl ~cert ~key t =
   {t with ssl= Some (`Crt_file_path cert, `Key_file_path key)}
