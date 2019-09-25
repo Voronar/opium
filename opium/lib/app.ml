@@ -5,27 +5,36 @@ module Server = Cohttp_lwt_unix.Server
 open Rock
 module Co = Cohttp
 
-let run_unix ?ssl t ~port =
+let app_handler t =
   let middlewares = t |> App.middlewares |> List.map ~f:Middleware.filter in
   let handler = App.handler t in
+  fun _ req body ->
+    let req = Request.create ~body req in
+    let handler = Opium_core.Filter.apply_all middlewares handler in
+    handler req
+    >>= fun {Response.code; headers; body; _} ->
+    Server.respond ~headers ~body ~status:code ()
+
+let run_unix ?ssl t ~port =
   let mode =
     Option.value_map ssl
       ~default:(`TCP (`Port port))
       ~f:(fun (c, k) -> `TLS (c, k, `No_password, `Port port))
   in
+  let callback = app_handler t in
   Server.create ~mode
-    (Server.make
-       ~callback:(fun _ req body ->
-         let req = Request.create ~body req in
-         let handler = Opium_core.Filter.apply_all middlewares handler in
-         handler req
-         >>= fun {Response.code; headers; body; _} ->
-         Server.respond ~headers ~body ~status:code ())
-       ())
+    (Server.make ~callback ())
+
+type ssl_t = [
+    `Crt_file_path of string
+] * [`Key_file_path of string]
+[@@deriving sexp_of]
+
+type run = ?ssl:ssl_t -> Rock.App.t -> port:int -> unit Lwt.t
 
 type t =
   { port: int
-  ; ssl: ([`Crt_file_path of string] * [`Key_file_path of string]) option
+  ; ssl: ssl_t option
   ; debug: bool
   ; verbose: bool
   ; routes: (Co.Code.meth * Route.t * Handler.t) list
@@ -117,7 +126,7 @@ let all = any [`GET; `POST; `DELETE; `PUT; `PATCH; `HEAD; `OPTIONS]
 let to_rock app =
   Rock.App.create ~middlewares:(attach_middleware app) ~handler:app.not_found
 
-let start app =
+let start ?(run=run_unix) app =
   let middlewares = attach_middleware app in
   (* if app.verbose then *)
   (* Logs.info.(add_rule "*" Info); *)
@@ -126,7 +135,7 @@ let start app =
   let port = app.port in
   let ssl = app.ssl in
   let app = Rock.App.create ~middlewares ~handler:app.not_found in
-  run_unix ~port ?ssl app
+  run ~port ?ssl app
 
 let hashtbl_add_multi tbl x y =
   Hashtbl.update tbl x ~f:(fun v ->
