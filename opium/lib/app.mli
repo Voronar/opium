@@ -59,7 +59,18 @@ val middleware : Middleware.t -> builder
 val to_rock : t -> Rock.App.t
 (** Convert an opium app to a rock app *)
 
-val start : t -> unit Lwt.t
+val app_handler : Rock.App.t ->
+  (Conduit_lwt_unix.flow * Cohttp.Connection.t) ->
+  Cohttp.Request.t ->
+  Cohttp_lwt.Body.t -> (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
+
+type ssl_t = [ `Crt_file_path of string ] * [ `Key_file_path of string ]
+
+type run = ?ssl:ssl_t -> Rock.App.t -> port:int -> unit Lwt.t
+
+val run_unix : run
+
+val start : ?run:run -> t -> unit Lwt.t
 (** Start an opium server. The thread returned can be cancelled to shutdown the
     server *)
 
